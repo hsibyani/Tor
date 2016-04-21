@@ -14,6 +14,7 @@
 #include "crypto_curve25519.h"
 #include "crypto_ed25519.h"
 #include "ed25519_vectors.inc"
+#include "rendauth.h"
 
 #include <openssl/evp.h>
 #include <openssl/rand.h>
@@ -1747,6 +1748,80 @@ static const struct testcase_setup_t ed25519_test_setup = {
 };
 
 static void
+test_crypto_verify_signature(void *arg)
+{
+  ed25519_keypair_t kp1, kp2;
+  ed25519_public_key_t pub1, pub2;
+  ed25519_secret_key_t sec1, sec2;
+  ed25519_signature_t sig1, sig2;
+  const uint8_t msg[] =
+    "GNU will be able to run Unix programs, "
+    "but will not be identical to Unix.";
+  const uint8_t msg2[] =
+    "Microsoft Windows extends the features of the DOS operating system, "
+    "yet is compatible with most existing applications that run under DOS.";
+  size_t msg_len = strlen((const char*)msg);
+  size_t msg2_len = strlen((const char*)msg2);
+
+  (void)arg;
+
+  tt_int_op(0, OP_EQ, ed25519_secret_key_generate(&sec1, 0));
+  tt_int_op(0, OP_EQ, ed25519_secret_key_generate(&sec2, 1));
+
+  tt_int_op(0, OP_EQ, ed25519_public_key_generate(&pub1, &sec1));
+  tt_int_op(0, OP_EQ, ed25519_public_key_generate(&pub2, &sec1));
+
+  tt_mem_op(pub1.pubkey, OP_EQ, pub2.pubkey, sizeof(pub1.pubkey));
+  tt_assert(ed25519_pubkey_eq(&pub1, &pub2));
+  tt_assert(ed25519_pubkey_eq(&pub1, &pub1));
+
+  memcpy(&kp1.pubkey, &pub1, sizeof(pub1));
+  memcpy(&kp1.seckey, &sec1, sizeof(sec1));
+  tt_int_op(0, OP_EQ, ed25519_sign(&sig1, msg, msg_len, &kp1));
+  tt_int_op(0, OP_EQ, ed25519_sign(&sig2, msg, msg_len, &kp1));
+
+  /* Ed25519 signatures are deterministic */
+  tt_mem_op(sig1.sig, OP_EQ, sig2.sig, sizeof(sig1.sig));
+
+  /* Basic signature is valid. */
+  tt_int_op(0, OP_EQ, verify_signature(&sig1, &pub1, msg));
+
+  /* Basic signature is valid. */
+  tt_int_op(0, OP_EQ, verify_signature(&sig1, &pub1, msg));
+
+  /* Altered signature doesn't work. */
+  sig1.sig[0] ^= 3;
+  tt_int_op(-1, OP_EQ, verify_signature(&sig1, &pub1, msg));
+
+  /* Wrong public key doesn't work. */
+  tt_int_op(0, OP_EQ, ed25519_public_key_generate(&pub2, &sec2));
+  tt_int_op(-1, OP_EQ, verify_signature(&sig2, &pub2, msg));
+  tt_assert(! ed25519_pubkey_eq(&pub1, &pub2));
+
+  /* Wrong message doesn't work. */
+  tt_int_op(0, OP_EQ, verify_signature(&sig2, &pub1, msg));
+  tt_int_op(-1, OP_EQ, verify_signature(&sig2, &pub1, msg2));
+
+
+  //auth_keyid auth_keyid;
+  //enc_keyid enc_keyid;
+
+  //uint8_t auth[4]={0xB3, 0x2D, 0x95, 0xB0};
+  //uint8_t enc[4]={0xE6, 0xD0, 0x6D, 0x1F};
+  
+  //printf("BEGINNING %u", 0);
+  //(auth_keyid).content = auth;
+  //(enc_keyid).content = enc;
+  //printf("BEGINNING %u", 2);
+  //tt_int_op(0, OP_EQ, create_auth_signature(&kp1, &auth_keyid, &enc_keyid, &sig1));
+
+ done:
+  ;
+}
+
+
+
+static void
 test_crypto_ed25519_simple(void *arg)
 {
   ed25519_keypair_t kp1, kp2;
@@ -2417,6 +2492,7 @@ struct testcase_t crypto_tests[] = {
   { "hkdf_sha256", test_crypto_hkdf_sha256, 0, NULL, NULL },
   { "curve25519_impl", test_crypto_curve25519_impl, 0, NULL, NULL },
   { "curve25519_impl_hibit", test_crypto_curve25519_impl, 0, NULL, (void*)"y"},
+  { "verify_signature", test_crypto_verify_signature, 0, NULL, NULL},
   { "curve25519_basepoint",
     test_crypto_curve25519_basepoint, TT_FORK, NULL, NULL },
   { "curve25519_wrappers", test_crypto_curve25519_wrappers, 0, NULL, NULL },
