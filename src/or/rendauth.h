@@ -9,10 +9,12 @@ struct rend_auth_password_t {
   size_t password_len;
 };
 
+//AUTH_KEY content contains the public introduction point authentication key.
 typedef struct{
 	  uint8_t content;
 } auth_keyid;
 
+//ENC_KEY content contains the public introduction point encryption key.
 typedef struct{
 	  uint8_t content;
 } enc_keyid;
