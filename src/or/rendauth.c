@@ -151,23 +151,18 @@ int create_auth_signature(const ed25519_keypair_t *keypair,
 				 const enc_keyid *enc,
 				 const ed25519_signature_t *sig)
 {
-  
+  crypto_digest_t *digest = crypto_digest256_new(DIGEST_SHA256);	
   //  "hidserv-userauth-ed25519"
       //  Nonce       (same as above)
       //  Pubkey      (same as above)
       //  AUTH_KEYID  (As in the INTRODUCE1 cell)
       //  ENC_KEYID   (As in the INTRODUCE1 cell)
 
-  smartlist_t *block = smartlist_new();
-  smartlist_add(block, "hidserv-userauth-ed25519");
+  crypto_digest_add_bytes(digest, "hidserv-userauth-ed25519", 24);
 
-  char rnd[256];
-  crypto_rand(rnd, 256);
-  char sha256digest[DIGEST256_LEN];
-  crypto_digest256(sha256digest, rnd, sizeof(rnd), DIGEST_SHA256);
   char nonce[16];
-  memcpy(nonce, sha256digest, 16);
-  smartlist_add(block, nonce);
+  crypto_rand(nonce, 16);
+  crypto_digest_add_bytes(digest, nonce, sizeof(nonce));
 
   //Not sure if base64 is needed
   //char ed_pub_b64[ED25519_BASE64_LEN + 1];
@@ -177,14 +172,12 @@ int create_auth_signature(const ed25519_keypair_t *keypair,
    // log_warn(LD_BUG, "Can't base64 encode ed25199 public key!");
   //  goto err;
  // }
-
-  smartlist_add(block, &keypair->pubkey);
-  smartlist_add(block, &auth->content);
-  smartlist_add(block, &enc->content);
-  char *to_sign_block = NULL;
-  to_sign_block = smartlist_join_strings(block, "", 0, NULL);
-  size_t block_size = strlen((const char*) to_sign_block);
-  return ed25519_sign(sig, to_sign_block, block_size, keypair);
+  crypto_digest_add_bytes(digest, &keypair->pubkey, sizeof(&keypair->pubkey));
+  crypto_digest_add_bytes(digest, &auth->content, sizeof(&auth->content));
+  crypto_digest_add_bytes(digest, &enc->content, sizeof(&enc->content));
+  uint8_t hashed_block[DIGEST256_LEN];
+  crypto_digest_get_digest(digest, (char*)hashed_block, sizeof(hashed_block));
+  return ed25519_sign(sig, &hashed_block, DIGEST256_LEN, keypair);
 }
 
 /**
