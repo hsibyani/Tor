@@ -336,6 +336,38 @@ secret_to_key_derivekey(uint8_t *key_out, size_t key_out_len,
 }
 
 /**
+ * Returns an algorithm ID (one of S2K_TYPE_*), based the length of the
+ * the bitwise-or of some S2K_FLAG_* options in <b>flags</b>.
+ */
+static uint8_t
+secret_to_key_flags_to_type(unsigned flags)
+{
+
+  #ifdef HAVE_SCRYPT
+    uint8_t type = S2K_TYPE_SCRYPT;
+  #else
+    uint8_t type = S2K_TYPE_RFC2440;
+  #endif
+
+    if (flags & S2K_FLAG_NO_SCRYPT)
+      type = S2K_TYPE_RFC2440;
+    if (flags & S2K_FLAG_USE_PBKDF2)
+      type = S2K_TYPE_PBKDF2;
+  return type;
+}
+
+/**
+ * Returns the buffer length required by secret_to_key_new, based on
+ * the bitwise-or of some S2K_FLAG_* options in <b>flags</b>.
+ */
+int
+secret_to_key_output_length(unsigned flags)
+{
+  uint8_t type = secret_to_key_flags_to_type(flags);
+  return secret_to_key_spec_len(type) + secret_to_key_key_len(type);
+}
+
+/**
  * Construct a new s2k algorithm specifier and salt in <b>buf</b>, according
  * to the bitwise-or of some S2K_FLAG_* options in <b>flags</b>.  Up to
  * <b>buf_len</b> bytes of storage may be used in <b>buf</b>.  Return the
@@ -346,17 +378,7 @@ secret_to_key_make_specifier(uint8_t *buf, size_t buf_len, unsigned flags)
 {
   int rv;
   int spec_len;
-#ifdef HAVE_SCRYPT
-  uint8_t type = S2K_TYPE_SCRYPT;
-#else
-  uint8_t type = S2K_TYPE_RFC2440;
-#endif
-
-  if (flags & S2K_FLAG_NO_SCRYPT)
-    type = S2K_TYPE_RFC2440;
-  if (flags & S2K_FLAG_USE_PBKDF2)
-    type = S2K_TYPE_PBKDF2;
-
+  uint8_t type = secret_to_key_flags_to_type(flags);
   spec_len = secret_to_key_spec_len(type);
 
   if ((int)buf_len < spec_len + 1)
@@ -463,4 +485,3 @@ secret_to_key_check(const uint8_t *spec_and_key, size_t spec_and_key_len,
   memwipe(buf, 0, sizeof(buf));
   return rv;
 }
-
