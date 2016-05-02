@@ -1,7 +1,9 @@
 #include "or.h"
 #include "rendauth.h"
+#include "container.h"
 #include "crypto.h"
 #include "crypto_s2k.h"
+#include "crypto_ed25519.h"
 
 /*
  * This section deals with authentication users through introduction-points
@@ -148,52 +150,61 @@ static const char *str_userauth_ed25519 = "hidserv-userauth-ed25519";
  * generate the signature.
  * Return 0 on success and -1 on failure.
  */
-static int create_auth_signature(const ed25519_keypair_t *keypair,
-				 AUTH_KEYID,
-				 ENC_KEYID)
+int create_auth_signature(const ed25519_keypair_t *keypair,
+                                 const auth_keyid *auth,
+                                 const enc_keyid *enc,
+                                 const ed25519_signature_t *sig)
 {
-  char rnd[256];
-  char *to_sign_block = NULL;
-  ed25519_signature_t sig;
-  crypto_rand(*rnd, sizeof(rnd));
-  char sha256digest[DIGEST256_LEN];
-  crypto_digest256(sha256digest, rnd, sizeof(rnd), DIGEST_SHA256);
-
-      //  "hidserv-userauth-ed25519"
-      //  Nonce       (same as above)
-      //  Pubkey      (same as above)
-      //  AUTH_KEYID  (As in the INTRODUCE1 cell)
-      //  ENC_KEYID   (As in the INTRODUCE1 cell)
-
-  smartlist_t *block = smartlist_new();
-  smartlist_add(block, str_userauth_ed25199);
+  crypto_digest_t *digest = crypto_digest256_new(DIGEST_SHA256);
+  crypto_digest_add_bytes(digest, "hidserv-userauth-ed25519", 24);
 
   char nonce[16];
-  memcpy(nonce, sha256digest, 16);
+  crypto_rand(nonce, 16);
+  crypto_digest_add_bytes(digest, nonce, 16);
+  crypto_digest_add_bytes(digest, &keypair->pubkey, 32);
+  crypto_digest_add_bytes(digest, auth->content, 4);
+  crypto_digest_add_bytes(digest, enc->content, 4);
 
-  smartlist_add(block, nonce);
+  uint8_t hashed_block[DIGEST256_LEN];
+  crypto_digest_get_digest(digest, hashed_block, DIGEST256_LEN);
+  return ed25519_sign(sig, hashed_block, DIGEST256_LEN, keypair);
+}
 
-  char ed_pub_b64[ED25519_BASE64_LEN + 1];
-  ret = ed25519_public_to_base64(ed_pub_b64, &keypair->pubkey);
-  if (ret < 0) {
-    log_warn(LD_BUG, "Can't base64 encode ed25199 public key!");
-    goto err;
-  }
 
-  smartlist_add(block, ed_pub_b64);
-  smartlist_add(block, AUTH_KEYID);
-  smartlist_add(block, ENC_KEYID);
-  to_sign_block = smartlist_join_strings(block, "", 0, NULL);
-  return ed25519_sign(&sig, to_sign_block, sizeof(to_sign_block), &keypair);
+/**
+ * This function should only be used for testing.
+ * Generate an authorization siganture.Given a <b>keypair</b>
+ * an <b>AUTH_KEYID</b> and an <b>ENC_KEYID</b> the function will
+ * generate the signature. This method includes a nonce as input
+ * which is to be used only in testing.
+ * Return 0 on success and -1 on failure.
+ */
+int create_auth_signature_testing(const ed25519_keypair_t *keypair,
+				 const auth_keyid *auth,
+				 const enc_keyid *enc,
+				 const ed25519_signature_t *sig,
+				 const char *nonce)
+{
+  crypto_digest_t *digest = crypto_digest256_new(DIGEST_SHA256);
+  crypto_digest_add_bytes(digest, "hidserv-userauth-ed25519", 24);
+  crypto_digest_add_bytes(digest, nonce, 16);
+  crypto_digest_add_bytes(digest, &keypair->pubkey, 32);
+  crypto_digest_add_bytes(digest, auth->content, 4);
+  crypto_digest_add_bytes(digest, enc->content, 4);
+
+  uint8_t hashed_block[DIGEST256_LEN];
+  crypto_digest_get_digest(digest, hashed_block, DIGEST256_LEN);
+  return ed25519_sign(sig, hashed_block, DIGEST256_LEN, keypair);
 }
 
 /**
  * Verify <b>signature</b> of a <b>msg</b> and a <b>pubkey</b>.
  * Return 0 if signature is valid, -1 if not.
  */
-static int verify_signature(const ed25519_signature_t *signature,
+int verify_signature(const ed25519_signature_t *signature,
 			    const ed25519_public_key_t *pubkey,
 			    const uint8_t *msg)
 {
-  return ed25519_checksig(signature, msg, sizeof(*msg), pubkey);
+  size_t strleng = strlen((const char*)msg);
+  return ed25519_checksig(signature, msg, strleng, pubkey);
 }
