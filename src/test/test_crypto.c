@@ -1802,18 +1802,52 @@ test_crypto_verify_signature(void *arg)
   tt_int_op(0, OP_EQ, verify_signature(&sig2, &pub1, msg));
   tt_int_op(-1, OP_EQ, verify_signature(&sig2, &pub1, msg2));
 
+ /*
+  * The following is to test create_auth_signature
+  * We will be using create_auth_signature_testing in order
+  * to pass on the nonce
+  */
 
-  //auth_keyid auth_keyid;
-  //enc_keyid enc_keyid;
-
-  //uint8_t auth[4]={0xB3, 0x2D, 0x95, 0xB0};
-  //uint8_t enc[4]={0xE6, 0xD0, 0x6D, 0x1F};
+  auth_keyid auth_keyid;
+  enc_keyid enc_keyid;
+  char nonce[16]={'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p'};
   
-  //printf("BEGINNING %u", 0);
-  //(auth_keyid).content = auth;
-  //(enc_keyid).content = enc;
-  //printf("BEGINNING %u", 2);
-  //tt_int_op(0, OP_EQ, create_auth_signature(&kp1, &auth_keyid, &enc_keyid, &sig1));
+ /* 
+  * The block contains the following in this order
+  *  "hidserv-userauth-ed25519"
+  *  Nonce       (same as above)
+  *  Pubkey      (same as above)
+  *  AUTH_KEYID  (As in the INTRODUCE1 cell)
+  *  ENC_KEYID   (As in the INTRODUCE1 cell)
+  */
+
+  int i;
+  char data[DIGEST512_LEN];
+  char *mem_op_hex_tmp=NULL;
+  uint8_t auth[4]={0xB3, 0x2D, 0x95, 0xB0};
+  uint8_t enc[4]={0xE6, 0xD0, 0x6D, 0x1F};
+
+  crypto_digest_t *digest = crypto_digest256_new(DIGEST_SHA256);
+  crypto_digest_add_bytes(digest, "hidserv-userauth-ed25519", 24);
+  crypto_digest_add_bytes(digest, nonce, 16);
+  crypto_digest_add_bytes(digest, &kp1.pubkey, 32);
+  crypto_digest_add_bytes(digest, auth, 4);
+  crypto_digest_add_bytes(digest, enc, 4);
+  char digestify[DIGEST256_LEN];
+  crypto_digest_get_digest(digest, digestify, DIGEST256_LEN);
+
+  memcpy((auth_keyid).content, auth, 4);
+  (auth_keyid).size = 4;
+  memcpy((enc_keyid).content, enc, 4);
+  (enc_keyid).size = 4;
+
+  ed25519_signature_t sig3;
+  ed25519_signature_t sig4;
+  ed25519_sign(&sig4, digestify, DIGEST256_LEN, &kp1);
+  tt_int_op(0, OP_EQ, create_auth_signature_testing(&kp1, &auth_keyid, &enc_keyid, &sig3, &nonce));
+  
+  tt_int_op(0, OP_EQ, ed25519_checksig(&sig4, digestify, DIGEST256_LEN, &pub1));
+  tt_int_op(0, OP_EQ, ed25519_checksig(&sig3, digestify, DIGEST256_LEN, &pub1));
 
  done:
   ;

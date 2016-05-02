@@ -11,12 +11,14 @@ struct rend_auth_password_t {
 
 //AUTH_KEY content contains the public introduction point authentication key.
 typedef struct{
-	  uint8_t content;
+	  size_t size;
+	  uint8_t content[4];
 } auth_keyid;
 
 //ENC_KEY content contains the public introduction point encryption key.
 typedef struct{
-	  uint8_t content;
+	  size_t size;
+	  uint8_t content[4];
 } enc_keyid;
 
 enum rend_auth_hash_method_t {
@@ -34,5 +36,11 @@ int create_auth_signature(const ed25519_keypair_t *keypair,
                                  const auth_keyid *auth,
                                  const enc_keyid *enc,
                                  const ed25519_signature_t *sig);
+
+int create_auth_signature_testing(const ed25519_keypair_t *keypair,
+                                 const auth_keyid *auth,
+                                 const enc_keyid *enc,
+                                 const ed25519_signature_t *sig,
+				 const char *nonce);
 
 #endif

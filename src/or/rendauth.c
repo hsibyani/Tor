@@ -147,37 +147,50 @@ static int hash_user (struct rend_auth_password_t* user_data,
  * Return 0 on success and -1 on failure.
  */
 int create_auth_signature(const ed25519_keypair_t *keypair,
-				 const auth_keyid *auth, 
-				 const enc_keyid *enc,
-				 const ed25519_signature_t *sig)
+                                 const auth_keyid *auth,
+                                 const enc_keyid *enc,
+                                 const ed25519_signature_t *sig)
 {
-  crypto_digest_t *digest = crypto_digest256_new(DIGEST_SHA256);	
-  //  "hidserv-userauth-ed25519"
-      //  Nonce       (same as above)
-      //  Pubkey      (same as above)
-      //  AUTH_KEYID  (As in the INTRODUCE1 cell)
-      //  ENC_KEYID   (As in the INTRODUCE1 cell)
-
+  crypto_digest_t *digest = crypto_digest256_new(DIGEST_SHA256);
   crypto_digest_add_bytes(digest, "hidserv-userauth-ed25519", 24);
 
   char nonce[16];
   crypto_rand(nonce, 16);
-  crypto_digest_add_bytes(digest, nonce, sizeof(nonce));
+  crypto_digest_add_bytes(digest, nonce, 16);
+  crypto_digest_add_bytes(digest, &keypair->pubkey, 32);
+  crypto_digest_add_bytes(digest, auth->content, 4);
+  crypto_digest_add_bytes(digest, enc->content, 4);
 
-  //Not sure if base64 is needed
-  //char ed_pub_b64[ED25519_BASE64_LEN + 1];
-  //int ret;
-  //ret = ed25519_public_to_base64(ed_pub_b64, &keypair->pubkey);
-  //if (ret < 0) {
-   // log_warn(LD_BUG, "Can't base64 encode ed25199 public key!");
-  //  goto err;
- // }
-  crypto_digest_add_bytes(digest, &keypair->pubkey, sizeof(&keypair->pubkey));
-  crypto_digest_add_bytes(digest, &auth->content, sizeof(&auth->content));
-  crypto_digest_add_bytes(digest, &enc->content, sizeof(&enc->content));
   uint8_t hashed_block[DIGEST256_LEN];
-  crypto_digest_get_digest(digest, (char*)hashed_block, sizeof(hashed_block));
-  return ed25519_sign(sig, &hashed_block, DIGEST256_LEN, keypair);
+  crypto_digest_get_digest(digest, hashed_block, DIGEST256_LEN);
+  return ed25519_sign(sig, hashed_block, DIGEST256_LEN, keypair);
+}
+
+
+/**
+ * This function should only be used for testing.
+ * Generate an authorization siganture.Given a <b>keypair</b> 
+ * an <b>AUTH_KEYID</b> and an <b>ENC_KEYID</b> the function will
+ * generate the signature. This method includes a nonce as input
+ * which is to be used only in testing.
+ * Return 0 on success and -1 on failure.
+ */
+int create_auth_signature_testing(const ed25519_keypair_t *keypair,
+				 const auth_keyid *auth, 
+				 const enc_keyid *enc,
+				 const ed25519_signature_t *sig,
+				 const char *nonce)
+{
+  crypto_digest_t *digest = crypto_digest256_new(DIGEST_SHA256);	
+  crypto_digest_add_bytes(digest, "hidserv-userauth-ed25519", 24);
+  crypto_digest_add_bytes(digest, nonce, 16);
+  crypto_digest_add_bytes(digest, &keypair->pubkey, 32);
+  crypto_digest_add_bytes(digest, auth->content, 4);
+  crypto_digest_add_bytes(digest, enc->content, 4);
+
+  uint8_t hashed_block[DIGEST256_LEN];
+  crypto_digest_get_digest(digest, hashed_block, DIGEST256_LEN);
+  return ed25519_sign(sig, hashed_block, DIGEST256_LEN, keypair);
 }
 
 /**
