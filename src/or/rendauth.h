@@ -28,7 +28,7 @@ enum rend_auth_hash_method_t {
 int rend_auth_add_user (const char* filename, smartlist_t* new_users,
                         enum rend_auth_hash_method_t hash_method);
 
-int verify_signature(const ed25519_signature_t *signature,
+int verify_auth_signature(const ed25519_signature_t *signature,
                             const ed25519_public_key_t *pubkey,
                             const uint8_t *msg);
 

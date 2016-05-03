@@ -157,9 +157,9 @@ int create_auth_signature(const ed25519_keypair_t *keypair,
   char nonce[16];
   crypto_rand(nonce, 16);
   crypto_digest_add_bytes(digest, nonce, 16);
-  crypto_digest_add_bytes(digest, &keypair->pubkey, 32);
-  crypto_digest_add_bytes(digest, auth->content, 4);
-  crypto_digest_add_bytes(digest, enc->content, 4);
+  crypto_digest_add_bytes(digest, &keypair->pubkey, ED25519_PUBKEY_LEN);
+  crypto_digest_add_bytes(digest, auth->content, auth->size);
+  crypto_digest_add_bytes(digest, enc->content, enc->size);
 
   uint8_t hashed_block[DIGEST256_LEN];
   crypto_digest_get_digest(digest, hashed_block, DIGEST256_LEN);
@@ -184,9 +184,9 @@ int create_auth_signature_testing(const ed25519_keypair_t *keypair,
   crypto_digest_t *digest = crypto_digest256_new(DIGEST_SHA256);	
   crypto_digest_add_bytes(digest, "hidserv-userauth-ed25519", 24);
   crypto_digest_add_bytes(digest, nonce, 16);
-  crypto_digest_add_bytes(digest, &keypair->pubkey, 32);
-  crypto_digest_add_bytes(digest, auth->content, 4);
-  crypto_digest_add_bytes(digest, enc->content, 4);
+  crypto_digest_add_bytes(digest, &keypair->pubkey, ED25519_PUBKEY_LEN);
+  crypto_digest_add_bytes(digest, auth->content, auth->size);
+  crypto_digest_add_bytes(digest, enc->content, enc->size);
 
   uint8_t hashed_block[DIGEST256_LEN];
   crypto_digest_get_digest(digest, hashed_block, DIGEST256_LEN);
@@ -195,12 +195,12 @@ int create_auth_signature_testing(const ed25519_keypair_t *keypair,
 
 /**
  * Verify <b>signature</b> of a <b>msg</b> and a <b>pubkey</b>.
+ * It should be used to verify auth signatures.
  * Return 0 if signature is valid, -1 if not.
  */
-int verify_signature(const ed25519_signature_t *signature, 
+int verify_auth_signature(const ed25519_signature_t *signature, 
 			    const ed25519_public_key_t *pubkey,
 			    const uint8_t *msg)
 {
-  size_t strleng = strlen((const char*)msg);
-  return ed25519_checksig(signature, msg, strleng, pubkey);
+  return ed25519_checksig(signature, msg, DIGEST256_LEN, pubkey);
 }
