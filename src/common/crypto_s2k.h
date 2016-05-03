@@ -53,6 +53,8 @@ int secret_to_key_new(uint8_t *buf,
                       const char *secret, size_t secret_len,
                       unsigned flags);
 
+int secret_to_key_output_length(unsigned flags);
+
 int secret_to_key_make_specifier(uint8_t *buf, size_t buf_len, unsigned flags);
 
 int secret_to_key_check(const uint8_t *spec_and_key, size_t spec_and_key_len,
@@ -70,4 +72,3 @@ STATIC int secret_to_key_compute_key(uint8_t *key_out, size_t key_out_len,
 #endif
 
 #endif
-
