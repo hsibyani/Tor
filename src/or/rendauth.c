@@ -14,12 +14,12 @@
  * secret_to_key_new flag. The file is stored in a human readable format of one
  * user per line in the following format; username:hash_info
  * Empty lines are ignored. Poorly formatted lines are also ignored with a
- * warning.
+ * warning. Whitespace after the colon is ignored.
  * hash_info contains the hash of the password, the salt, and the parameters
  * stored in base-64. It corresponds to the output of secret_to_key_new in
  * crypto_s2k.
  * The username can only have printable ascii characters that are not a colon
- * or a new line.
+ * or a new line. They are not surrounded with whitespace.
  */
 
 typedef struct {
@@ -37,6 +37,67 @@ static void clean_hash (rend_auth_password_hashed_t*);
 
 // TODO: authenticate and store in memory
 
+static strmap_t *user_to_hash_map = NULL;
+
+static int parse_line (const char *line,
+                       rend_auth_password_hashed_t *hashed_data) {
+  // Since a colon at the beginning of the line is invalid, we initially set
+  // the colon size to be 0, signifying that we haven't found the seperating
+  // colon yet.
+  int colon_position = 0;
+  int i, line_length; // i iterator, at the end corresponds to line_length
+  int b64_hash_length;
+  for (i = 0; line[i] != '\0'; i++) {
+    if (!colon_position) {
+      // We have not found the colon yet
+      if (line[i] == ':' && i == 0)
+        return -1; // Colon at the beginning
+      if (line[i] != ':' && !isprint(line[i]))
+        return -1; // non-printable character in the username, invalid
+      if (line[i] == ':')
+        colon_position = i; // We found the seperator
+    } else if (line[i] == ':')
+      return -1; // Double seperator
+  }
+  line_length = i;
+  b64_hash_length = line_length - colon_position - 1;
+  hashed_data->username = tor_malloc(colon_position);
+  memcpy(hashed_data->username, line, colon_position);
+  // Create a buffer to hold the hash, maximum size
+  size_t max_size_hash_info = (b64_hash_length * 3)/4;
+  hashed_data->hash_info = tor_malloc(max_size_hash_info);
+  // ignores whitespace
+  int n_bytes = base64_decode(hashed_data->hash_info, max_size_hash_info,
+                              line + colon_position + 1, b64_hash_length);
+  if (n_bytes < 0) {
+    clean_hash(hashed_data);
+    return -1;
+  }
+  hashed_data->hash_info_len = n_bytes;
+  return 0;
+}
+
+static int load_users (const char *filename) {
+  FILE* password_file = fopen(filename, "r");
+  char* line;
+  size_t length;
+  // TODO : check if loading error or EOF
+  while (getline(&line, &length, password_file) >= 0) {
+    line[length - 1] = '\0';
+    length--;
+    // First check if line is empty
+    int i, empty = 1;
+    for (i = 0; i < length; i++)
+      if (!isspace(line[i])){
+        empty = 0;
+        break;
+      }
+    if (!empty) {
+      // TODO : call parse_line
+    }
+  }
+}
+
 /**
  * Add the usernames and hashed salts and passwords used for
  * authenticating users through the introduction-points to the file referred to
@@ -45,7 +106,7 @@ static void clean_hash (rend_auth_password_hashed_t*);
  * <b>hash_method</b>. Details found in section comment.
  * Return 0 on success, -1 on failure.
  */
-int rend_auth_add_user (const char* filename, smartlist_t* new_users,
+int rend_auth_add_user (const char *filename, smartlist_t *new_users,
                         int hash_method)
 {
   FILE* password_file = fopen(filename, "a");
