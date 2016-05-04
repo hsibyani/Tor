@@ -1783,25 +1783,6 @@ test_crypto_verify_signature(void *arg)
   /* Ed25519 signatures are deterministic */
   tt_mem_op(sig1.sig, OP_EQ, sig2.sig, sizeof(sig1.sig));
 
-  /* Basic signature is valid. */
-  tt_int_op(0, OP_EQ, verify_signature(&sig1, &pub1, msg));
-
-  /* Basic signature is valid. */
-  tt_int_op(0, OP_EQ, verify_signature(&sig1, &pub1, msg));
-
-  /* Altered signature doesn't work. */
-  sig1.sig[0] ^= 3;
-  tt_int_op(-1, OP_EQ, verify_signature(&sig1, &pub1, msg));
-
-  /* Wrong public key doesn't work. */
-  tt_int_op(0, OP_EQ, ed25519_public_key_generate(&pub2, &sec2));
-  tt_int_op(-1, OP_EQ, verify_signature(&sig2, &pub2, msg));
-  tt_assert(! ed25519_pubkey_eq(&pub1, &pub2));
-
-  /* Wrong message doesn't work. */
-  tt_int_op(0, OP_EQ, verify_signature(&sig2, &pub1, msg));
-  tt_int_op(-1, OP_EQ, verify_signature(&sig2, &pub1, msg2));
-
  /*
   * The following is to test create_auth_signature
   * We will be using create_auth_signature_testing in order
@@ -1847,7 +1828,9 @@ test_crypto_verify_signature(void *arg)
   tt_int_op(0, OP_EQ, create_auth_signature_testing(&kp1, &auth_keyid, &enc_keyid, &sig3, &nonce));
   
   tt_int_op(0, OP_EQ, ed25519_checksig(&sig4, digestify, DIGEST256_LEN, &pub1));
+  tt_int_op(0, OP_EQ, verify_auth_signature(&sig4, &pub1, digestify));
   tt_int_op(0, OP_EQ, ed25519_checksig(&sig3, digestify, DIGEST256_LEN, &pub1));
+  tt_int_op(0, OP_EQ, verify_auth_signature(&sig3, &pub1, digestify));
 
  done:
   ;
