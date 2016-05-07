@@ -1,13 +1,13 @@
 #ifndef TOR_RENDAUTH_H
 #define TOR_RENDAUTH_H
 
-// Contains password based authorization info for hidden services in clear form.
+// Contains the password and key based authorization info for hidden services in clear form.
 typedef struct {
   char* username; // not null-terminated
   size_t username_len; // username length
-  char* password;
-  size_t password_len;
-} rend_auth_password_t;
+  char* info;
+  size_t info_len;
+} rend_auth_info_t;
 
 //AUTH_KEY content contains the public introduction point authentication key.
 typedef struct{

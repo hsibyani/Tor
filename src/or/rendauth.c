@@ -26,14 +26,14 @@ typedef struct {
   char *username; // needs to be null-terminated
   uint8_t *hash_info;
   size_t hash_info_len;
-} rend_auth_password_hashed_t;
+} rend_auth_info_hashed_t;
 
-static int hash_user (rend_auth_password_t*,
-                      rend_auth_password_hashed_t*,
+static int hash_user (rend_auth_info_t*,
+                      rend_auth_info_hashed_t*,
                       unsigned hash_method);
 static int add_to_file(FILE*,
-                      rend_auth_password_hashed_t*);
-static void clean_hash (rend_auth_password_hashed_t*);
+                      rend_auth_info_hashed_t*);
+static void clean_hash (rend_auth_info_hashed_t*);
 
 // TODO: authenticate and store in memory
 
@@ -41,29 +41,29 @@ static void clean_hash (rend_auth_password_hashed_t*);
  * Add the usernames and hashed salts and passwords used for
  * authenticating users through the introduction-points to the file referred to
  * by the null-terminated string <b>filename</b>. Read the usernames as
- * "struct rend_auth_password_t*" from <b>new_users</b>. Hashes according to
+ * "struct rend_auth_info_t*" from <b>new_users</b>. Hashes according to
  * <b>hash_method</b>. Details found in section comment.
  * Return 0 on success, -1 on failure.
  */
 int rend_auth_add_user (const char* filename, smartlist_t* new_users,
                         int hash_method)
 {
-  FILE* password_file = fopen(filename, "a");
-  if (password_file == NULL) {
+  FILE* info_file = fopen(filename, "a");
+  if (info_file == NULL) {
     // TODO log error
     return -1;
   }
   // TODO : wipe the unhashed user data from memory?
   // TODO : parallelize
   // TODO : verify usernames?
-  SMARTLIST_FOREACH(new_users, rend_auth_password_t*, user_data, {
-    rend_auth_password_hashed_t* hashed_data =
-        tor_malloc(sizeof(rend_auth_password_hashed_t));
+  SMARTLIST_FOREACH(new_users, rend_auth_info_t*, user_data, {
+    rend_auth_info_hashed_t* hashed_data =
+        tor_malloc(sizeof(rend_auth_info_hashed_t));
     if (hash_user(user_data, hashed_data, hash_method) == -1) {
       // TODO : log error
       return -1;
     }
-    if (add_to_file(password_file, hashed_data) == -1) {
+    if (add_to_file(info_file, hashed_data) == -1) {
       // TODO : log error
       return -1;
     }
@@ -71,17 +71,17 @@ int rend_auth_add_user (const char* filename, smartlist_t* new_users,
     tor_free(hashed_data);
   });
   // TODO: check that file closed? what to do
-  fclose(password_file);
+  fclose(info_file);
   return 0;
 }
 
 
 /**
  * Appends the hashed user data in <b>hashed_data</b> to the file in
- * <b>password_file</b>.
+ * <b>info_file</b>.
  */
-static int add_to_file(FILE* password_file,
-                       rend_auth_password_hashed_t* hashed_data)
+static int add_to_file(FILE* info_file,
+                       rend_auth_info_hashed_t* hashed_data)
 {
   // TODO : make sure this is correct
   int b64_flags = 0;
@@ -95,7 +95,7 @@ static int add_to_file(FILE* password_file,
     tor_free(b64_hash);
     return -1;
   }
-  int written = fprintf(password_file, "\n%s:%s", hashed_data->username,
+  int written = fprintf(info_file, "\n%s:%s", hashed_data->username,
                         b64_hash);
   tor_free(b64_hash);
   if (written < 0)
@@ -110,8 +110,8 @@ static int add_to_file(FILE* password_file,
  * Returns 0 on success, -1 on failure. On success, call clean_hash to clean up
  * allocated memory.
  */
-static int hash_user (rend_auth_password_t *user_data,
-                      rend_auth_password_hashed_t *hashed_data,
+static int hash_user (rend_auth_info_t *user_data,
+                      rend_auth_info_hashed_t *hashed_data,
                       unsigned hash_method)
 {
   int buffer_len = secret_to_key_output_length(hash_method);
@@ -123,8 +123,8 @@ static int hash_user (rend_auth_password_t *user_data,
   size_t len_out;
   int hash_result = secret_to_key_new(hashed_data->hash_info,
                                       hashed_data->hash_info_len,
-                                      &len_out, user_data->password,
-                                      user_data->password_len, hash_method);
+                                      &len_out, user_data->info,
+                                      user_data->info_len, hash_method);
   hashed_data->hash_info_len = len_out;
   if (hash_result == S2K_OKAY)
     return 0;
@@ -137,7 +137,7 @@ static int hash_user (rend_auth_password_t *user_data,
 /**
  * Cleans heap data inside the <b>hashed_data</b> structure.
  */
-static void clean_hash(rend_auth_password_hashed_t *hashed_data) {
+static void clean_hash(rend_auth_info_hashed_t *hashed_data) {
   tor_free(hashed_data->username);
   tor_free(hashed_data->hash_info);
 }
@@ -156,7 +156,7 @@ int create_auth_signature(const ed25519_keypair_t *keypair,
                                  const ed25519_signature_t *sig)
 {
   crypto_digest_t *digest = crypto_digest256_new(DIGEST_SHA256);
-  crypto_digest_add_bytes(digest, "hidserv-userauth-ed25519", 24);
+  crypto_digest_add_bytes(digest, str_userauth_ed25519, 24);
 
   char nonce[16];
   crypto_rand(nonce, 16);
@@ -186,7 +186,7 @@ int create_auth_signature_testing(const ed25519_keypair_t *keypair,
 				 const char *nonce)
 {
   crypto_digest_t *digest = crypto_digest256_new(DIGEST_SHA256);
-  crypto_digest_add_bytes(digest, "hidserv-userauth-ed25519", 24);
+  crypto_digest_add_bytes(digest, str_userauth_ed25519, 24);
   crypto_digest_add_bytes(digest, nonce, 16);
   crypto_digest_add_bytes(digest, &keypair->pubkey, ED25519_PUBKEY_LEN);
   crypto_digest_add_bytes(digest, auth->content, auth->size);
