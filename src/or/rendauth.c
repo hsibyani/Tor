@@ -40,7 +40,7 @@ static void clean_hash (rend_auth_info_hashed_t*);
 static strmap_t *user_to_hash_map = NULL;
 
 static int parse_line (const char *line,
-                       rend_auth_password_hashed_t *hashed_data) {
+                       rend_auth_info_hashed_t *hashed_data) {
   // Since a colon at the beginning of the line is invalid, we initially set
   // the colon size to be 0, signifying that we haven't found the seperating
   // colon yet.
@@ -78,11 +78,11 @@ static int parse_line (const char *line,
 }
 
 static int load_users (const char *filename) {
-  FILE* password_file = fopen(filename, "r");
+  FILE* info_file = fopen(filename, "r");
   char* line;
   size_t length;
   // TODO : check if loading error or EOF
-  while (getline(&line, &length, password_file) >= 0) {
+  while (getline(&line, &length, info_file) >= 0) {
     line[length - 1] = '\0';
     length--;
     // First check if line is empty
