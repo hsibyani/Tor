@@ -14,6 +14,7 @@
 #include "crypto_curve25519.h"
 #include "crypto_ed25519.h"
 #include "ed25519_vectors.inc"
+#include "rendauth.h"
 
 #include <openssl/evp.h>
 #include <openssl/rand.h>
@@ -1747,6 +1748,97 @@ static const struct testcase_setup_t ed25519_test_setup = {
 };
 
 static void
+test_crypto_verify_signature(void *arg)
+{
+  ed25519_keypair_t kp1, kp2;
+  ed25519_public_key_t pub1, pub2;
+  ed25519_secret_key_t sec1, sec2;
+  ed25519_signature_t sig1, sig2;
+  const uint8_t msg[] =
+    "GNU will be able to run Unix programs, "
+    "but will not be identical to Unix.";
+  const uint8_t msg2[] =
+    "Microsoft Windows extends the features of the DOS operating system, "
+    "yet is compatible with most existing applications that run under DOS.";
+  size_t msg_len = strlen((const char*)msg);
+  size_t msg2_len = strlen((const char*)msg2);
+
+  (void)arg;
+
+  tt_int_op(0, OP_EQ, ed25519_secret_key_generate(&sec1, 0));
+  tt_int_op(0, OP_EQ, ed25519_secret_key_generate(&sec2, 1));
+
+  tt_int_op(0, OP_EQ, ed25519_public_key_generate(&pub1, &sec1));
+  tt_int_op(0, OP_EQ, ed25519_public_key_generate(&pub2, &sec1));
+
+  tt_mem_op(pub1.pubkey, OP_EQ, pub2.pubkey, sizeof(pub1.pubkey));
+  tt_assert(ed25519_pubkey_eq(&pub1, &pub2));
+  tt_assert(ed25519_pubkey_eq(&pub1, &pub1));
+
+  memcpy(&kp1.pubkey, &pub1, sizeof(pub1));
+  memcpy(&kp1.seckey, &sec1, sizeof(sec1));
+  tt_int_op(0, OP_EQ, ed25519_sign(&sig1, msg, msg_len, &kp1));
+  tt_int_op(0, OP_EQ, ed25519_sign(&sig2, msg, msg_len, &kp1));
+
+  /* Ed25519 signatures are deterministic */
+  tt_mem_op(sig1.sig, OP_EQ, sig2.sig, sizeof(sig1.sig));
+
+ /*
+  * The following is to test create_auth_signature
+  * We will be using create_auth_signature_testing in order
+  * to pass on the nonce
+  */
+
+  auth_keyid auth_keyid;
+  enc_keyid enc_keyid;
+  char nonce[16]={'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p'};
+  
+ /* 
+  * The block contains the following in this order
+  *  "hidserv-userauth-ed25519"
+  *  Nonce       (same as above)
+  *  Pubkey      (same as above)
+  *  AUTH_KEYID  (As in the INTRODUCE1 cell)
+  *  ENC_KEYID   (As in the INTRODUCE1 cell)
+  */
+
+  int i;
+  char data[DIGEST512_LEN];
+  char *mem_op_hex_tmp=NULL;
+  uint8_t auth[4]={0xB3, 0x2D, 0x95, 0xB0};
+  uint8_t enc[4]={0xE6, 0xD0, 0x6D, 0x1F};
+
+  crypto_digest_t *digest = crypto_digest256_new(DIGEST_SHA256);
+  crypto_digest_add_bytes(digest, "hidserv-userauth-ed25519", 24);
+  crypto_digest_add_bytes(digest, nonce, 16);
+  crypto_digest_add_bytes(digest, &kp1.pubkey, 32);
+  crypto_digest_add_bytes(digest, auth, 4);
+  crypto_digest_add_bytes(digest, enc, 4);
+  char digestify[DIGEST256_LEN];
+  crypto_digest_get_digest(digest, digestify, DIGEST256_LEN);
+
+  memcpy((auth_keyid).content, auth, 4);
+  (auth_keyid).size = 4;
+  memcpy((enc_keyid).content, enc, 4);
+  (enc_keyid).size = 4;
+
+  ed25519_signature_t sig3;
+  ed25519_signature_t sig4;
+  ed25519_sign(&sig4, digestify, DIGEST256_LEN, &kp1);
+  tt_int_op(0, OP_EQ, create_auth_signature_testing(&kp1, &auth_keyid, &enc_keyid, &sig3, &nonce));
+
+  tt_int_op(0, OP_EQ, ed25519_checksig(&sig4, digestify, DIGEST256_LEN, &pub1));
+  tt_int_op(0, OP_EQ, verify_auth_signature(&sig4, &pub1, digestify));
+  tt_int_op(0, OP_EQ, ed25519_checksig(&sig3, digestify, DIGEST256_LEN, &pub1));
+  tt_int_op(0, OP_EQ, verify_auth_signature(&sig3, &pub1, digestify));
+
+ done:
+  ;
+}
+
+
+
+static void
 test_crypto_ed25519_simple(void *arg)
 {
   ed25519_keypair_t kp1, kp2;
@@ -2417,6 +2509,7 @@ struct testcase_t crypto_tests[] = {
   { "hkdf_sha256", test_crypto_hkdf_sha256, 0, NULL, NULL },
   { "curve25519_impl", test_crypto_curve25519_impl, 0, NULL, NULL },
   { "curve25519_impl_hibit", test_crypto_curve25519_impl, 0, NULL, (void*)"y"},
+  { "verify_signature", test_crypto_verify_signature, 0, NULL, NULL},
   { "curve25519_basepoint",
     test_crypto_curve25519_basepoint, TT_FORK, NULL, NULL },
   { "curve25519_wrappers", test_crypto_curve25519_wrappers, 0, NULL, NULL },

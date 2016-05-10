@@ -67,6 +67,10 @@
 
 #include "keccak-tiny/keccak-tiny.h"
 
+#ifdef HAVE_LIBSCRYPT_H
+#include <libscrypt.h>
+#endif
+
 #ifdef ANDROID
 /* Android's OpenSSL seems to have removed all of its Engine support. */
 #define DISABLE_ENGINES
@@ -2014,6 +2018,45 @@ crypto_hmac_sha256(char *hmac_out,
   tor_assert(rv);
 }
 
+/** Compute the scrypt of the <b>password_len</b> bytes in <b>password</b>,
+ * using the <b>salt</b> of length <b>salt_len</b> and the general cost
+ * parameter <b>N</b>, the RAM cost <b>r</b> and the CPU cost <b>p</b>.
+ * Store the result in the <b>key_len byte</b> long <b>key</b>. Return 0 on
+ * success, -1 on failure.
+ */
+int
+crypto_scrypt(uint8_t* key, size_t key_len,
+              const char* password, size_t password_len,
+              const uint8_t* salt, size_t salt_len,
+              uint64_t N, uint32_t r, uint32_t p) {
+  #ifdef HAVE_LIBSCRYPT_H
+  return libscrypt_scrypt((const uint8_t *)password, password_len, salt,
+                          salt_len, N, r, p, key, key_len);
+                          // returns 0 if success, -1 if failure
+  #elif defined(HAVE_EVP_PBE_SCRYPT)
+  size_t maxmem = 0; // uses maximum memory openssl allows
+  if (EVP_PBE_scrypt(password, password_len, (const unsigned char*)salt,
+                     salt_len, N, r, p, maxmem, (unsigned char*)key, key_len)
+                     == 1)
+      return 0;
+  else
+      return -1;
+
+  #else
+  // no scrypt library, cast unused variables to avoid an error, fail
+  (void)key;
+  (void)key_len;
+  (void)password;
+  (void)password_len;
+  (void)salt;
+  (void)salt_len;
+  (void)N;
+  (void)r;
+  (void)p;
+  return -1;
+  #endif
+}
+
 /** Internal state for a eXtendable-Output Function (XOF). */
 struct crypto_xof_t {
   keccak_state s;
@@ -3205,4 +3248,3 @@ crypto_global_cleanup(void)
 }
 
 /** @} */
-

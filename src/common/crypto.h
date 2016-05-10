@@ -248,6 +248,10 @@ void crypto_digest_assign(crypto_digest_t *into,
 void crypto_hmac_sha256(char *hmac_out,
                         const char *key, size_t key_len,
                         const char *msg, size_t msg_len);
+int crypto_scrypt(uint8_t* key, size_t key_len,
+                  const char* password, size_t password_len,
+                  const uint8_t* salt, size_t salt_len,
+                  uint64_t N, uint32_t r, uint32_t p);
 crypto_xof_t *crypto_xof_new(void);
 void crypto_xof_add_bytes(crypto_xof_t *xof, const uint8_t *data, size_t len);
 void crypto_xof_squeeze_bytes(crypto_xof_t *xof, uint8_t *out, size_t len);
@@ -320,4 +324,3 @@ STATIC int crypto_force_rand_ssleay(void);
 #endif
 
 #endif
-
