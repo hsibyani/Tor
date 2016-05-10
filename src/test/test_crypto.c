@@ -1826,7 +1826,7 @@ test_crypto_verify_signature(void *arg)
   ed25519_signature_t sig4;
   ed25519_sign(&sig4, digestify, DIGEST256_LEN, &kp1);
   tt_int_op(0, OP_EQ, create_auth_signature_testing(&kp1, &auth_keyid, &enc_keyid, &sig3, &nonce));
-  
+
   tt_int_op(0, OP_EQ, ed25519_checksig(&sig4, digestify, DIGEST256_LEN, &pub1));
   tt_int_op(0, OP_EQ, verify_auth_signature(&sig4, &pub1, digestify));
   tt_int_op(0, OP_EQ, ed25519_checksig(&sig3, digestify, DIGEST256_LEN, &pub1));

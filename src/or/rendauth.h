@@ -28,6 +28,12 @@ int verify_auth_signature(const ed25519_signature_t *signature,
                             const ed25519_public_key_t *pubkey,
                             const uint8_t *msg);
 
+int create_auth_block(const ed25519_keypair_t *keypair,
+                                 const auth_keyid *auth,
+                                 const enc_keyid *enc,
+                                 const ed25519_signature_t *sig,
+                                 const uint8_t *block);
+
 int create_auth_signature(const ed25519_keypair_t *keypair,
                                  const auth_keyid *auth,
                                  const enc_keyid *enc,

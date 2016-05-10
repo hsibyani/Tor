@@ -202,6 +202,25 @@ static void clean_hash(rend_auth_info_hashed_t *hashed_data) {
   tor_free(hashed_data->username);
   tor_free(hashed_data->hash_info);
 }
+/**
+ * Create the authentation block
+ */
+int create_auth_block(const ed25519_keypair_t *keypair,
+                                 const auth_keyid *auth,
+                                 const enc_keyid *enc,
+                                 const ed25519_signature_t *sig,
+				 const uint8_t *block)
+{
+  char nonce[16];
+  crypto_rand(nonce, 16);
+  int success = create_auth_signature_testing(keypair, auth, enc, sig, &nonce);
+  
+  memcpy(block, nonce, 16);
+  memcpy(block+16, &keypair->pubkey, 32);
+  memcpy(block+48, &sig, 64);
+  return success;
+
+}
 
 static const char *str_userauth_ed25519 = "hidserv-userauth-ed25519";
 
